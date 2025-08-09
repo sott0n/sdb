@@ -53,6 +53,32 @@ Process 12345 stopped with signal STOP
 sdb> continue
 ```
 
+## Troubleshooting
+
+### Permission Issues
+
+If you get "Operation not permitted" when attaching to a process, this is due to ptrace security restrictions:
+
+```bash
+# Check current ptrace restriction level
+cat /proc/sys/kernel/yama/ptrace_scope
+
+# Temporarily allow ptrace attach (requires sudo)
+sudo sysctl kernel.yama.ptrace_scope=0
+
+# Or run debugger with sudo
+sudo ./build/tools/sdb -p <pid>
+
+# Verify you own the target process
+ps -p <pid> -o pid,ppid,user,comm
+```
+
+**ptrace_scope values:**
+- `0` = no restrictions (allows attaching to any process you own)
+- `1` = restricted to child processes only (default on many systems)  
+- `2` = admin-only attach
+- `3` = no attach allowed
+
 ## Testing
 
 ```bash
