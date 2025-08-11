@@ -1,6 +1,7 @@
 # sdb
 
 **sdb** is a simple debugger implementation in C++ that provides basic process control and debugging capabilities using ptrace system calls.
+This is based on [TartanL/sdb](https://github.com/TartanLlama/sdb) and a book ["Building a Debugger"](https://www.amazon.co.jp/Building-Debugger-Sy-Brand/dp/171850408X).
 
 ## Features
 

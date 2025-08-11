@@ -93,6 +93,7 @@ namespace {
     while ((line = readline("sdb> ")) != nullptr) {
       std::string line_str;
 
+      // If the line is empty, use the last history entry.
       if (line == std::string_view("")) {
         free(line);
         if (history_length > 0) {

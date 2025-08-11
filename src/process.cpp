@@ -8,9 +8,8 @@
 std::unique_ptr<sdb::process>
 sdb::process::launch(std::filesystem::path path) {
   pid_t pid;
-  if ((pid = fork()) < 0) {
+  if ((pid = fork()) < 0)
     error::send_errno("fork failed");
-  }
 
   if (pid == 0) {
     if (ptrace(PTRACE_TRACEME, 0, nullptr, nullptr) < 0)
