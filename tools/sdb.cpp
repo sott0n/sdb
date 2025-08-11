@@ -1,122 +1,119 @@
+#include <algorithm>
 #include <iostream>
-#include <unistd.h>
+#include <readline/history.h>
+#include <readline/readline.h>
+#include <sstream>
+#include <string>
 #include <string_view>
 #include <sys/ptrace.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <readline/readline.h>
-#include <readline/history.h>
-#include <string>
+#include <unistd.h>
 #include <vector>
-#include <algorithm>
-#include <sstream>
 
-#include <libsdb/process.hpp>
 #include <libsdb/error.hpp>
-
+#include <libsdb/process.hpp>
 
 namespace {
-  std::unique_ptr<sdb::process> attach(int argc, const char** argv) {
-    // Passing PID
-    if (argc == 3 && argv[1] == std::string_view("-p")) {
-      pid_t pid = std::atoi(argv[2]);
-      return sdb::process::attach(pid);
-    } else {
-      const char* program_path = argv[1];
-      return sdb::process::launch(program_path);
-    }
+std::unique_ptr<sdb::process> attach(int argc, const char **argv) {
+  // Passing PID
+  if (argc == 3 && argv[1] == std::string_view("-p")) {
+    pid_t pid = std::atoi(argv[2]);
+    return sdb::process::attach(pid);
+  } else {
+    const char *program_path = argv[1];
+    return sdb::process::launch(program_path);
+  }
+}
+
+std::vector<std::string> split(std::string_view str, char delimiter) {
+  std::vector<std::string> out{};
+  std::stringstream ss{std::string{str}};
+  std::string item;
+
+  while (std::getline(ss, item, delimiter)) {
+    out.push_back(item);
   }
 
-  std::vector<std::string> split(std::string_view str, char delimiter) {
-    std::vector<std::string> out{};
-    std::stringstream ss{ std::string{str} };
-    std::string item;
+  return out;
+}
 
-    while (std::getline(ss, item, delimiter)) {
-      out.push_back(item);
-    }
+bool is_prefix(std::string_view str, std::string_view of) {
+  if (str.size() > of.size())
+    return false;
+  return std::equal(str.begin(), str.end(), of.begin());
+}
 
-    return out;
+void resume(pid_t pid) {
+  if (ptrace(PTRACE_CONT, pid, nullptr, nullptr) < 0) {
+    std::cerr << "Couldn't continue\n";
+    std::exit(-1);
   }
-  
-  bool is_prefix(std::string_view str, std::string_view of) {
-    if (str.size() > of.size()) return false;
-    return std::equal(str.begin(), str.end(), of.begin());
+}
+
+void print_stop_reason(const sdb::process &process, sdb::stop_reason reason) {
+  std::cout << "Process " << process.pid() << ' ';
+
+  switch (reason.reason) {
+  case sdb::process_state::exited:
+    std::cout << "exited with status " << static_cast<int>(reason.info);
+    break;
+  case sdb::process_state::terminated:
+    std::cout << "terminated with signal " << sigabbrev_np(reason.info);
+    break;
+  case sdb::process_state::stopped:
+    std::cout << "stopped with signal " << sigabbrev_np(reason.info);
+    break;
   }
 
-  void resume(pid_t pid) {
-    if (ptrace(PTRACE_CONT, pid, nullptr, nullptr) < 0) {
-      std::cerr << "Couldn't continue\n";
-      std::exit(-1);
-    }
+  std::cout << std::endl;
+}
+
+void handle_command(std::unique_ptr<sdb::process> &process,
+                    std::string_view line) {
+  auto args = split(line, ' ');
+  auto command = args[0];
+
+  if (is_prefix(command, "continue")) {
+    process->resume();
+    process->wait_on_signal();
+  } else {
+    std::cerr << "Unknown command\n";
   }
 
-  void print_stop_reason(
-    const sdb::process& process, sdb::stop_reason reason) {
-      std::cout << "Process " << process.pid() << ' ';
+  auto reason = process->wait_on_signal();
+  print_stop_reason(*process, reason);
+}
 
-      switch (reason.reason) {
-      case sdb::process_state::exited:
-        std::cout << "exited with status "
-          << static_cast<int>(reason.info);
-        break;
-      case sdb::process_state::terminated:
-        std::cout << "terminated with signal "
-          << sigabbrev_np(reason.info);
-        break;
-      case sdb::process_state::stopped:
-        std::cout << "stopped with signal " << sigabbrev_np(reason.info);
-        break;
+void main_loop(std::unique_ptr<sdb::process> &process) {
+  char *line = nullptr;
+  while ((line = readline("sdb> ")) != nullptr) {
+    std::string line_str;
+
+    // If the line is empty, use the last history entry.
+    if (line == std::string_view("")) {
+      free(line);
+      if (history_length > 0) {
+        line_str = history_list()[history_length - 1]->line;
       }
-
-      std::cout << std::endl;
-    }
-
-  void handle_command(std::unique_ptr<sdb::process>& process,
-                      std::string_view line) {
-    auto args = split(line, ' ');
-    auto command = args[0];
-
-    if (is_prefix(command, "continue")) {
-      process->resume();
-      process->wait_on_signal();
     } else {
-      std::cerr << "Unknown command\n";
+      line_str = line;
+      add_history(line);
+      free(line);
     }
 
-    auto reason = process->wait_on_signal();
-    print_stop_reason(*process, reason);
-  }
-
-  void main_loop(std::unique_ptr<sdb::process>& process) {
-    char* line = nullptr;
-    while ((line = readline("sdb> ")) != nullptr) {
-      std::string line_str;
-
-      // If the line is empty, use the last history entry.
-      if (line == std::string_view("")) {
-        free(line);
-        if (history_length > 0) {
-          line_str = history_list()[history_length - 1]->line;
-        }
-      } else {
-        line_str = line;
-        add_history(line);
-        free(line);
-      }
-
-      if (!line_str.empty()) {
-        try {
-          handle_command(process, line_str);
-        } catch (const sdb::error& err) {
-          std::cout << err.what() << "\n";
-        }
+    if (!line_str.empty()) {
+      try {
+        handle_command(process, line_str);
+      } catch (const sdb::error &err) {
+        std::cout << err.what() << "\n";
       }
     }
   }
 }
+} // namespace
 
-int main(int argc, const char** argv) {
+int main(int argc, const char **argv) {
   if (argc == 1) {
     std::cerr << "No arguments given\n";
     return -1;
@@ -125,7 +122,7 @@ int main(int argc, const char** argv) {
   try {
     auto process = attach(argc, argv);
     main_loop(process);
-  } catch (const sdb::error& err) {
+  } catch (const sdb::error &err) {
     std::cout << err.what() << "\n";
   }
 }
