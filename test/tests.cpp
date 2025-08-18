@@ -32,7 +32,7 @@ TEST_CASE("process::launch no such program", "[process]") {
 }
 
 TEST_CASE("process::attach success", "[process]") {
-  auto target = process::launch("targets/run_endlessly", false);
+  auto target = process::launch("build/test/targets/run_endlessly", false);
   auto proc = process::attach(target->pid());
   REQUIRE(get_process_status(target->pid()) == 't');
 }
@@ -43,7 +43,7 @@ TEST_CASE("process::attach invalid PID", "[process]") {
 
 TEST_CASE("process:resume success", "[process]") {
   {
-    auto proc = process::launch("targets/run_endlessly");
+    auto proc = process::launch("build/test/targets/run_endlessly");
     proc->resume();
     auto status = get_process_status(proc->pid());
     auto success = status == 'R' or status == 'S';
@@ -51,7 +51,7 @@ TEST_CASE("process:resume success", "[process]") {
   }
 
   {
-    auto target = process::launch("targets/run_endlessly", false);
+    auto target = process::launch("build/test/targets/run_endlessly", false);
     auto proc = process::attach(target->pid());
     proc->resume();
     auto status = get_process_status(proc->pid());
@@ -62,14 +62,14 @@ TEST_CASE("process:resume success", "[process]") {
 
 TEST_CASE("process::resume already terminated", "[process]") {
   {
-    auto proc = process::launch("targets/end_immediately");
+    auto proc = process::launch("build/test/targets/end_immediately");
     proc->resume();
     proc->wait_on_signal();
     REQUIRE_THROWS_AS(proc->resume(), error);
   }
 
   {
-    auto target = process::launch("targets/run_endlessly", false);
+    auto target = process::launch("build/test/targets/end_immediately", false);
     auto proc = process::attach(target->pid());
     proc->resume();
     proc->wait_on_signal();

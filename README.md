@@ -14,7 +14,7 @@ This is based on [TartanL/sdb](https://github.com/TartanLlama/sdb) and a book ["
 ## How to build
 
 ```bash
-cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=/home/sott0n/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg>/vcpkg/scripts/buildsystems/vcpkg.cmake
 cmake --build build
 ```
 

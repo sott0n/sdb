@@ -7,7 +7,7 @@
 #include <libsdb/pipe.hpp>
 
 namespace {
-void exit_with_error(sdb::pipe &channel, std::string const &prefix) {
+void exit_with_perror(sdb::pipe &channel, std::string const &prefix) {
   auto message = prefix + ": " + std::strerror(errno);
   channel.write(reinterpret_cast<std::byte *>(message.data()), message.size());
   exit(-1);
@@ -22,12 +22,12 @@ std::unique_ptr<sdb::process> sdb::process::launch(std::filesystem::path path,
     error::send_errno("fork failed");
 
   if (pid == 0) {
-    channel.close_write();
+    channel.close_read();
     if (debug and ptrace(PTRACE_TRACEME, 0, nullptr, nullptr) < 0)
-      exit_with_error(channel, "Tracing failed");
+      exit_with_perror(channel, "Tracing failed");
 
     if (execlp(path.c_str(), path.c_str(), nullptr) < 0)
-      exit_with_error(channel, "exec failed");
+      exit_with_perror(channel, "exec failed");
   }
 
   channel.close_write();
@@ -37,7 +37,7 @@ std::unique_ptr<sdb::process> sdb::process::launch(std::filesystem::path path,
   if (data.size() > 0) {
     waitpid(pid, nullptr, 0);
     auto chars = reinterpret_cast<char *>(data.data());
-    error::send(std::string(chars, chars + data.size() + 1));
+    error::send(std::string(chars, chars + data.size()));
   }
 
   std::unique_ptr<process> proc(
